@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+desktop/node_modules/
+bridge.log
+.claude/
+*.codex_adapter_backup
+package-lock.json

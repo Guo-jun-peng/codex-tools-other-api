@@ -1,0 +1,63 @@
+codex:
+  auto_manage: false
+  backup_suffix: .codex_adapter_backup
+model_mapping:
+  gpt-5-code:
+    enabled: true
+    image_gen_alias: null
+    is_image_gen: false
+    is_multimodal: false
+    is_video_gen: false
+    provider: siliconflow
+    target: deepseek-ai/DeepSeek-V3.2
+    video_gen_alias: null
+    vision_alias: null
+  gpt-5.4:
+    enabled: true
+    image_gen_alias: null
+    is_image_gen: false
+    is_multimodal: false
+    is_video_gen: false
+    provider: siliconflow
+    target: deepseek-ai/DeepSeek-V4-Flash
+    video_gen_alias: null
+    vision_alias: null
+providers:
+  ? ''
+  : adapter: siliconflow
+    api_key: sk-xhvbxxacoirkjehhirrxvvcdzvijxbdmyxbsdkrwrrgjkblz
+    api_key_env: ''
+    base_url: https://api.siliconflow.cn/v1
+    enabled: true
+  deepseek:
+    adapter: deepseek
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com/v1
+  doubao:
+    adapter: doubao
+    api_key_env: ARK_API_KEY
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+  kimi:
+    adapter: kimi
+    api_key_env: KIMI_API_KEY
+    base_url: https://api.moonshot.cn/v1
+  qwen:
+    adapter: qwen
+    api_key_env: QWEN_API_KEY
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  siliconflow:
+    adapter: siliconflow
+    api_key: sk-xhvbxxacoirkjehhirrxvvcdzvijxbdmyxbsdkrwrrgjkblz
+    api_key_env: ''
+    base_url: https://api.siliconflow.cn/v1
+    enabled: true
+  zhipu:
+    adapter: zhipu
+    api_key_env: ZHIPU_API_KEY
+    base_url: https://open.bigmodel.cn/api/paas/v4
+server:
+  host: 127.0.0.1
+  port: 8899
+tools:
+  web_search:
+    enabled: true
