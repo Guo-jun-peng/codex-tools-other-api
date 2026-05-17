@@ -42,6 +42,25 @@ async def get_status():
 
 
 # ═══════════════════════════════════════════════════════════════════
+# 适配器元数据
+# ═══════════════════════════════════════════════════════════════════
+
+@router.get("/adapters")
+async def list_adapters():
+    reg = get_registry()
+    adapters = []
+    for name in reg.list():
+        adapter = reg.get(name)
+        if adapter:
+            adapters.append({
+                "name": name,
+                "base_url": adapter.base_url,
+                "api_key_env": adapter.api_key_env,
+            })
+    return {"adapters": adapters}
+
+
+# ═══════════════════════════════════════════════════════════════════
 # 模型 CRUD
 # ═══════════════════════════════════════════════════════════════════
 
@@ -197,6 +216,25 @@ async def delete_model(alias: str):
     del cfg._data["model_mapping"][alias]
     cfg.save()
     return {"status": "ok"}
+
+
+@router.put("/models/{alias}/toggle")
+async def toggle_model(alias: str):
+    cfg = get_config()
+    mapping = cfg._data.get("model_mapping", {})
+
+    if alias not in mapping:
+        return {"error": f"模型别名 '{alias}' 不存在"}, 404
+
+    entry = mapping[alias]
+    if isinstance(entry, dict):
+        entry["enabled"] = not entry.get("enabled", True)
+        new_state = entry["enabled"]
+    else:
+        return {"error": "旧格式模型不支持切换，请编辑模型"}, 400
+
+    cfg.save()
+    return {"status": "ok", "alias": alias, "enabled": new_state}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -443,13 +481,12 @@ async def import_config(data: dict):
 
 @router.post("/shutdown")
 async def shutdown():
-    import os
-    import signal
+    import sys
 
     def _do_shutdown():
         import time as _time
         _time.sleep(0.1)
-        os.kill(os.getpid(), signal.SIGTERM)
+        sys.exit(0)
 
     import threading
     threading.Thread(target=_do_shutdown, daemon=True).start()

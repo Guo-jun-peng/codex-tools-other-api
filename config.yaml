@@ -23,12 +23,6 @@ model_mapping:
     video_gen_alias: null
     vision_alias: null
 providers:
-  ? ''
-  : adapter: siliconflow
-    api_key: sk-xhvbxxacoirkjehhirrxvvcdzvijxbdmyxbsdkrwrrgjkblz
-    api_key_env: ''
-    base_url: https://api.siliconflow.cn/v1
-    enabled: true
   deepseek:
     adapter: deepseek
     api_key_env: DEEPSEEK_API_KEY
@@ -47,8 +41,7 @@ providers:
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
   siliconflow:
     adapter: siliconflow
-    api_key: sk-xhvbxxacoirkjehhirrxvvcdzvijxbdmyxbsdkrwrrgjkblz
-    api_key_env: ''
+    api_key_env: SILICONFLOW_API_KEY
     base_url: https://api.siliconflow.cn/v1
     enabled: true
   zhipu:

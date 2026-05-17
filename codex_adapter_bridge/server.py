@@ -35,6 +35,7 @@ from .middleware import (
 )
 from .models import build_error_response, build_responses_response, make_message_output_item, _uid
 from .stats import get_stats, RequestLog
+from .tools import TOOL_EXECUTORS
 from .admin_api import router as admin_router
 
 logger = logging.getLogger("codex-adapter-bridge")
@@ -424,18 +425,15 @@ def create_app(verbose: bool = False) -> FastAPI:
             if has_image_gen:
                 return await _handle_responses_image_gen(body, cfg, model)
 
-            logger.info("Chat 请求 → %s: model=%s, msgs=%d, tools=%d, stream=%s",
+            logger.info("Chat request -> %s: model=%s, msgs=%d, tools=%d, stream=%s",
                 target_model, chat_req.get("model"),
                 len(chat_req.get("messages", [])),
                 len(chat_req.get("tools", []) or []),
                 chat_req.get("stream"))
 
-            # Check if we need the tool agent loop
-            tools_cfg = cfg._data.get("tools", {})
-            has_server_tools = any(
-                tools_cfg.get(name, {}).get("enabled", True)
-                for name in ["web_search"]
-            )
+            # Only use agent loop if request actually has server-executable tools
+            request_tool_names = [t.get("function", {}).get("name", "") for t in (chat_req.get("tools") or [])]
+            has_server_tools = any(name in TOOL_EXECUTORS for name in request_tool_names)
 
             if stream and has_server_tools:
                 return StreamingResponse(
@@ -556,7 +554,7 @@ async def _handle_stream(
     try:
         while True:
             try:
-                chunk = await asyncio.wait_for(anext(chat_stream), timeout=15.0)
+                chunk = await asyncio.wait_for(anext(chat_stream), timeout=120.0)
             except asyncio.TimeoutError:
                 yield ": heartbeat\n\n"
                 continue

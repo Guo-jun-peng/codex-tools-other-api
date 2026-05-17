@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import threading
 from pathlib import Path
@@ -59,9 +60,9 @@ class Config:
             with self._lock:
                 self._config_path = path
                 self._data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+                self._inject_env()
         else:
             self._data = {}
-        self._inject_env()
 
     def reload(self) -> None:
         self.load(self._config_path)
@@ -69,7 +70,7 @@ class Config:
     def save(self) -> None:
         with self._lock:
             if self._config_path:
-                data = self._data.copy()
+                data = copy.deepcopy(self._data)
                 env_api_keys = {}
                 for name, info in data.get("providers", {}).items():
                     if "api_key" in info and info.get("api_key_env", ""):
