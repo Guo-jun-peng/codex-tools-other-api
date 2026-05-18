@@ -6,6 +6,10 @@ import Settings from './pages/Settings'
 import Logs from './pages/Logs'
 import About from './pages/About'
 import StatusBar from './components/StatusBar'
+import { api } from './services/api'
+import type { ProxyStatus } from './types'
+
+const POLL_INTERVAL_MS = 5000
 
 const navItems = [
   { path: '/', label: '仪表板', icon: '◉' },
@@ -16,19 +20,17 @@ const navItems = [
 ]
 
 export default function App() {
-  const [status, setStatus] = useState<any>(null)
+  const [status, setStatus] = useState<ProxyStatus | null>(null)
 
   useEffect(() => {
-    let timer: any
+    let timer: ReturnType<typeof setInterval>
     const poll = async () => {
-      try {
-        const resp = await fetch('/admin/api/status')
-        const data = await resp.json()
-        setStatus(data)
-      } catch { setStatus(null) }
+      const r = await api.getStatus()
+      if (!r._error) setStatus(r as ProxyStatus)
+      else setStatus(null)
     }
     poll()
-    timer = setInterval(poll, 3000)
+    timer = setInterval(poll, POLL_INTERVAL_MS)
     return () => clearInterval(timer)
   }, [])
 

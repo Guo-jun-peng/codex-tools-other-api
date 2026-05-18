@@ -156,6 +156,11 @@ class Config:
         return self._data.get("vision_routing", {})
 
     @property
+    def default_slash_provider(self) -> str:
+        """含 '/' 的模型名（如 deepseek-ai/DeepSeek-V3.2）默认路由到的 provider"""
+        return self._data.get("server", {}).get("default_slash_provider", "siliconflow")
+
+    @property
     def providers(self) -> dict:
         return self._data.get("providers", {})
 
@@ -190,13 +195,14 @@ class Config:
                 if self._has_api_key(p):
                     return provider_name, target
 
-        # Fuzzy match: prefer siliconflow for models with provider/model format
-        # (e.g., deepseek-ai/DeepSeek-V3.2 is a SiliconFlow model)
+        # Fuzzy match: prefer the configured default provider for models with
+        # provider/model format (e.g., deepseek-ai/DeepSeek-V3.2 → SiliconFlow)
         if "/" in model_name:
-            for pname in ("siliconflow",):
-                pinfo = self.providers.get(pname)
+            default = self.default_slash_provider
+            if default:
+                pinfo = self.providers.get(default)
                 if pinfo and self._has_api_key(pinfo):
-                    return pname, model_name
+                    return default, model_name
 
         for pname, pinfo in self.providers.items():
             if pinfo.get("enabled", True) and self._has_api_key(pinfo) and pname in model_name.lower():
@@ -234,37 +240,43 @@ class Config:
     @staticmethod
     def generate_default(output_path: Path) -> None:
         default = {
-            "server": {"host": "127.0.0.1", "port": 8899},
+            "server": {"host": "127.0.0.1", "port": 8899, "default_slash_provider": "siliconflow"},
             "providers": {
                 "siliconflow": {
                     "adapter": "siliconflow",
                     "base_url": "https://api.siliconflow.cn/v1",
                     "api_key_env": "SILICONFLOW_API_KEY",
+                    "enabled": True,
                 },
                 "qwen": {
                     "adapter": "qwen",
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key_env": "QWEN_API_KEY",
+                    "enabled": True,
                 },
                 "deepseek": {
                     "adapter": "deepseek",
                     "base_url": "https://api.deepseek.com/v1",
                     "api_key_env": "DEEPSEEK_API_KEY",
+                    "enabled": True,
                 },
                 "kimi": {
                     "adapter": "kimi",
                     "base_url": "https://api.moonshot.cn/v1",
                     "api_key_env": "KIMI_API_KEY",
+                    "enabled": True,
                 },
                 "doubao": {
                     "adapter": "doubao",
                     "base_url": "https://ark.cn-beijing.volces.com/api/v3",
                     "api_key_env": "ARK_API_KEY",
+                    "enabled": True,
                 },
                 "zhipu": {
                     "adapter": "zhipu",
                     "base_url": "https://open.bigmodel.cn/api/paas/v4",
                     "api_key_env": "ZHIPU_API_KEY",
+                    "enabled": True,
                 },
             },
             "model_mapping": {

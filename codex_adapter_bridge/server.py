@@ -239,8 +239,7 @@ async def _handle_responses_image_gen(body: dict, cfg, model: str) -> JSONRespon
     cwd = _os.getcwd()
     img_filename = f"generated_image_{_uid('img')}.png"
     img_filepath = _os.path.join(cwd, img_filename)
-    with open(img_filepath, "wb") as f:
-        f.write(img_bytes)
+    await asyncio.to_thread(_write_image_file, img_filepath, img_bytes)
     logger.info("图片已保存: %s (%d bytes)", img_filepath, len(img_bytes))
 
     call_id = _uid("call_")
@@ -306,6 +305,12 @@ def _route_vision(model: str, body: dict) -> tuple[BaseAdapter, str, str, str]:
     logger.warning("视觉路由未配置，使用文本模型（图片已移除）")
     _strip_images_from_input(input_items)
     return _get_adapter_for_model(model)
+
+
+def _write_image_file(filepath: str, data: bytes) -> None:
+    """同步写文件 —— 由 asyncio.to_thread 在独立线程中执行"""
+    with open(filepath, "wb") as f:
+        f.write(data)
 
 
 def _strip_images_from_input(input_items: list[dict]) -> None:
@@ -398,21 +403,34 @@ def create_app(verbose: bool = False) -> FastAPI:
 
         # Extract API key from Authorization header (Codex passes auth.json key)
         auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            header_api_key = auth_header[7:]
-            # Inject into all providers that don't have an API key set
-            cfg = get_config()
-            for pname, pinfo in cfg._data.get("providers", {}).items():
-                if not pinfo.get("api_key", ""):
-                    pinfo["api_key"] = header_api_key
+        header_api_key = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
         try:
             adapter, provider_name, target_model, api_key = _route_vision(model, body)
         except ValueError as exc:
-            status_code = 400
-            error_msg = str(exc)
-            _record_request(start_time, model, "responses", status_code, stream, error_msg, provider="", target_model="")
-            return JSONResponse(content=build_error_response(error_msg), status_code=400)
+            # Resolution may fail because no provider has api_key set
+            if header_api_key:
+                cfg = get_config()
+                for pname, pinfo in cfg._data.get("providers", {}).items():
+                    if not pinfo.get("api_key", ""):
+                        pinfo["api_key"] = header_api_key
+                        break
+                try:
+                    adapter, provider_name, target_model, api_key = _route_vision(model, body)
+                except ValueError as exc2:
+                    status_code = 400
+                    error_msg = str(exc2)
+                    _record_request(start_time, model, "responses", status_code, stream, error_msg, provider="", target_model="")
+                    return JSONResponse(content=build_error_response(error_msg), status_code=400)
+            else:
+                status_code = 400
+                error_msg = str(exc)
+                _record_request(start_time, model, "responses", status_code, stream, error_msg, provider="", target_model="")
+                return JSONResponse(content=build_error_response(error_msg), status_code=400)
+
+        # If resolved provider still lacks api_key, use header key directly
+        if not api_key and header_api_key:
+            api_key = header_api_key
 
         provider_timeout = get_config().get_provider(provider_name).get("timeout", 120) if provider_name else 120
         client = UpstreamClient(adapter, api_key, timeout=provider_timeout, stream_timeout=max(provider_timeout, 600))

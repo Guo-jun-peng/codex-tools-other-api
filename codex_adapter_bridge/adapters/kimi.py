@@ -14,9 +14,7 @@ class KimiAdapter(BaseAdapter):
     api_key_env = "KIMI_API_KEY"
 
     def preprocess_chat_request(self, chat_req: dict) -> dict:
-        chat_req.pop("logprobs", None)
-        chat_req.pop("logit_bias", None)
-        chat_req.pop("user", None)
+        super().preprocess_chat_request(chat_req)
 
         if "thinking" not in chat_req:
             chat_req["thinking"] = {"type": "disabled"}
@@ -30,41 +28,18 @@ class KimiAdapter(BaseAdapter):
         return chat_req
 
     def postprocess_chat_response(self, chat_resp: dict) -> dict:
-        choices = chat_resp.get("choices", [])
-        for choice in choices:
+        super().postprocess_chat_response(chat_resp)
+
+        for choice in chat_resp.get("choices", []):
             msg = choice.get("message", {})
             content = msg.get("content", "")
-
             if content and isinstance(content, str) and not msg.get("tool_calls"):
                 extracted = self.extract_tool_calls_from_content(content)
                 if extracted:
                     msg["tool_calls"] = extracted
                     msg["content"] = None
 
-            tool_calls = msg.get("tool_calls") or []
-            for tc in tool_calls:
-                if "type" not in tc:
-                    tc["type"] = "function"
-                func = tc.get("function", {})
-                if "arguments" in func and isinstance(func["arguments"], dict):
-                    func["arguments"] = json.dumps(func["arguments"], ensure_ascii=False)
-
         return chat_resp
-
-    def stream_event_transform(self, raw_event: dict) -> dict:
-        for choice in raw_event.get("choices", []):
-            delta = choice.get("delta", {})
-            tool_calls = delta.get("tool_calls", [])
-            for tc in tool_calls:
-                if "type" not in tc:
-                    tc["type"] = "function"
-                func = tc.get("function", {})
-                if "arguments" in func and isinstance(func["arguments"], dict):
-                    func["arguments"] = json.dumps(func["arguments"], ensure_ascii=False)
-        return raw_event
-
-    def supports_tool_calls(self) -> bool:
-        return True
 
     def extract_tool_calls_from_content(self, content: str) -> list[dict] | None:
         if not content:

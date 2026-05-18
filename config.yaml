@@ -3,7 +3,7 @@ codex:
   backup_suffix: .codex_adapter_backup
 model_mapping:
   gpt-5-code:
-    enabled: true
+    enabled: false
     image_gen_alias: null
     is_image_gen: false
     is_multimodal: false
@@ -22,23 +22,37 @@ model_mapping:
     target: deepseek-ai/DeepSeek-V4-Flash
     video_gen_alias: null
     vision_alias: null
+  gpt-5.5:
+    enabled: true
+    image_gen_alias: null
+    is_image_gen: false
+    is_multimodal: false
+    is_video_gen: false
+    provider: deepseek
+    target: deepseek-v4-pro
+    video_gen_alias: null
+    vision_alias: null
 providers:
   deepseek:
     adapter: deepseek
     api_key_env: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com/v1
+    enabled: true
   doubao:
     adapter: doubao
     api_key_env: ARK_API_KEY
     base_url: https://ark.cn-beijing.volces.com/api/v3
+    enabled: true
   kimi:
     adapter: kimi
     api_key_env: KIMI_API_KEY
     base_url: https://api.moonshot.cn/v1
+    enabled: true
   qwen:
     adapter: qwen
     api_key_env: QWEN_API_KEY
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    enabled: true
   siliconflow:
     adapter: siliconflow
     api_key_env: SILICONFLOW_API_KEY
@@ -48,7 +62,9 @@ providers:
     adapter: zhipu
     api_key_env: ZHIPU_API_KEY
     base_url: https://open.bigmodel.cn/api/paas/v4
+    enabled: true
 server:
+  default_slash_provider: siliconflow
   host: 127.0.0.1
   port: 8899
 tools:

@@ -13,39 +13,22 @@ class QwenAdapter(BaseAdapter):
     base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     api_key_env = "QWEN_API_KEY"
 
-    def preprocess_chat_request(self, chat_req: dict) -> dict:
-        chat_req.pop("logprobs", None)
-        chat_req.pop("logit_bias", None)
-        chat_req.pop("user", None)
-
-        stop = chat_req.get("stop")
-        if isinstance(stop, list):
-            chat_req["stop"] = stop
-        return chat_req
-
     def postprocess_chat_response(self, chat_resp: dict) -> dict:
-        choices = chat_resp.get("choices", [])
-        for choice in choices:
+        super().postprocess_chat_response(chat_resp)
+
+        for choice in chat_resp.get("choices", []):
             msg = choice.get("message", {})
             content = msg.get("content", "")
-
             if content and isinstance(content, str):
                 extracted = self.extract_tool_calls_from_content(content)
                 if extracted:
                     msg["tool_calls"] = extracted
                     msg["content"] = None
 
-            tool_calls = msg.get("tool_calls") or []
-            for tc in tool_calls:
-                if "type" not in tc:
-                    tc["type"] = "function"
-                func = tc.get("function", {})
-                if "arguments" in func and isinstance(func["arguments"], dict):
-                    func["arguments"] = json.dumps(func["arguments"], ensure_ascii=False)
-
         return chat_resp
 
     def stream_event_transform(self, raw_event: dict) -> dict:
+        # Qwen wraps chunks in {"output": {"choices": [...]}}
         if "output" in raw_event and "choices" not in raw_event:
             output = raw_event["output"]
             if isinstance(output, dict) and "choices" in output:
@@ -54,17 +37,7 @@ class QwenAdapter(BaseAdapter):
         if "choices" not in raw_event:
             return raw_event
 
-        for choice in raw_event.get("choices", []):
-            delta = choice.get("delta", {})
-            tool_calls = delta.get("tool_calls", [])
-            for tc in tool_calls:
-                if "type" not in tc:
-                    tc["type"] = "function"
-                func = tc.get("function", {})
-                if "arguments" in func and isinstance(func["arguments"], dict):
-                    func["arguments"] = json.dumps(func["arguments"], ensure_ascii=False)
-
-        return raw_event
+        return super().stream_event_transform(raw_event)
 
     def extract_tool_calls_from_content(self, content: str) -> list[dict] | None:
         if not content:
