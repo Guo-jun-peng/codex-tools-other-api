@@ -37,7 +37,6 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="app-header">
-        <h1 className="app-title">Codex 国内模型适配工具</h1>
         <StatusBar data={status} />
       </header>
       <div className="app-body">

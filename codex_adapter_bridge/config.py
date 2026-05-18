@@ -73,8 +73,11 @@ class Config:
                 data = copy.deepcopy(self._data)
                 env_api_keys = {}
                 for name, info in data.get("providers", {}).items():
-                    if "api_key" in info and info.get("api_key_env", ""):
-                        env_api_keys[name] = info.pop("api_key")
+                    if "api_key" in info:
+                        env_var = info.get("api_key_env", "")
+                        env_val = os.environ.get(env_var, "") if env_var else ""
+                        if env_val and info["api_key"] == env_val:
+                            env_api_keys[name] = info.pop("api_key")
                 self._config_path.write_text(
                     yaml.dump(data, allow_unicode=True, default_flow_style=False),
                     encoding="utf-8",

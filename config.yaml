@@ -2,14 +2,14 @@ codex:
   auto_manage: false
   backup_suffix: .codex_adapter_backup
 model_mapping:
-  gpt-5-code:
-    enabled: false
+  gpt-5.3-codex:
+    enabled: true
     image_gen_alias: null
     is_image_gen: false
     is_multimodal: false
     is_video_gen: false
     provider: siliconflow
-    target: deepseek-ai/DeepSeek-V3.2
+    target: Pro/moonshotai/Kimi-K2.6
     video_gen_alias: null
     vision_alias: null
   gpt-5.4:
@@ -20,6 +20,16 @@ model_mapping:
     is_video_gen: false
     provider: siliconflow
     target: deepseek-ai/DeepSeek-V4-Flash
+    video_gen_alias: null
+    vision_alias: null
+  gpt-5.4-mini:
+    enabled: true
+    image_gen_alias: null
+    is_image_gen: false
+    is_multimodal: false
+    is_video_gen: false
+    provider: siliconflow
+    target: Pro/deepseek-ai/DeepSeek-V3.2
     video_gen_alias: null
     vision_alias: null
   gpt-5.5:
@@ -40,16 +50,19 @@ providers:
     enabled: true
   doubao:
     adapter: doubao
+    api_key: ''
     api_key_env: ARK_API_KEY
     base_url: https://ark.cn-beijing.volces.com/api/v3
     enabled: true
   kimi:
     adapter: kimi
+    api_key: ''
     api_key_env: KIMI_API_KEY
     base_url: https://api.moonshot.cn/v1
     enabled: true
   qwen:
     adapter: qwen
+    api_key: ''
     api_key_env: QWEN_API_KEY
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     enabled: true
@@ -60,6 +73,7 @@ providers:
     enabled: true
   zhipu:
     adapter: zhipu
+    api_key: ''
     api_key_env: ZHIPU_API_KEY
     base_url: https://open.bigmodel.cn/api/paas/v4
     enabled: true

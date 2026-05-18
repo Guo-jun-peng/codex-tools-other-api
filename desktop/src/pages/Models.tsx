@@ -135,8 +135,8 @@ export default function Models() {
       {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
 
       {showForm && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) resetForm() }}>
-          <div className="modal">
+        <div className="modal-overlay" onClick={resetForm}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="card-title">{editingAlias ? '编辑模型' : '添加模型'}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
               <div className="form-group"><label className="form-label">模型别名 (Codex 使用的名称)</label><input className="form-input" value={form.alias} placeholder="如: gpt-5-code" onChange={(e) => setForm({ ...form, alias: e.target.value })} /></div>
@@ -157,8 +157,8 @@ export default function Models() {
 
       {/* Delete confirmation modal */}
       {deleteTarget && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
-          <div className="modal modal-confirm">
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()}>
             <h3 className="card-title" style={{ color: 'var(--danger)' }}>确认删除</h3>
             <p style={{ marginBottom: 8 }}>确认删除模型 <strong>"{deleteTarget}"</strong>？</p>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>删除后不可恢复，已配置的 Codex 将无法使用该模型。</p>

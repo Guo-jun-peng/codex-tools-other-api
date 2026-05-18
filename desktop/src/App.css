@@ -36,18 +36,12 @@ body {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  height: 52px;
+  justify-content: flex-end;
+  padding: 0 16px;
+  height: 36px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-}
-
-.app-title {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: .01em;
 }
 
 .app-body {
@@ -105,8 +99,8 @@ body {
 .status-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 12px;
+  gap: 14px;
+  font-size: 11px;
 }
 
 .status-dot {
