@@ -12,6 +12,7 @@ export default function Settings() {
   const [logLevel, setLogLevel] = useState('info')
   const [loading, setLoading] = useState(false)
   const [codexLoading, setCodexLoading] = useState(false)
+  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
 
   useEffect(() => {
     api.getSettings().then((r) => {
@@ -27,8 +28,10 @@ export default function Settings() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
   }
 
+  const portError = (port < 1024 || port > 65535) ? '端口范围: 1024-65535' : ''
+
   const saveSettings = async () => {
-    if (port < 1024 || port > 65535) { showToast('端口范围: 1024-65535', 'error'); return }
+    if (portError) { showToast(portError, 'error'); return }
     setLoading(true)
     const r = await api.updateSettings({ host, port, log_level: logLevel })
     setLoading(false)
@@ -51,6 +54,7 @@ export default function Settings() {
   }
 
   const restoreCodex = async () => {
+    setShowRestoreConfirm(false)
     setCodexLoading(true)
     const r = await api.restoreCodexConfig()
     setCodexLoading(false)
@@ -72,7 +76,11 @@ export default function Settings() {
         <h3 className="card-title">服务器配置</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px', maxWidth: 500 }}>
           <div className="form-group"><label className="form-label">监听地址</label><input className="form-input" value={host} onChange={(e) => setHost(e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">端口 (1024-65535)</label><input className="form-input" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} /></div>
+          <div className="form-group">
+            <label className="form-label">端口 (1024-65535)</label>
+            <input className="form-input" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} style={portError ? { borderColor: 'var(--danger)', boxShadow: '0 0 0 3px #fee2e2' } : {}} />
+            {portError && <span className="form-hint" style={{ color: 'var(--danger)' }}>{portError}</span>}
+          </div>
           <div className="form-group"><label className="form-label">日志级别</label><select className="form-select" value={logLevel} onChange={(e) => setLogLevel(e.target.value)}><option value="debug">Debug</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select></div>
         </div>
         <div className="btn-group" style={{ marginTop: 12 }}>
@@ -95,10 +103,25 @@ export default function Settings() {
         </div>
         <div className="btn-group">
           <button className="btn btn-primary" onClick={applyCodex} disabled={codexLoading}>{codexLoading ? '处理中...' : '写入配置 (使用代理)'}</button>
-          <button className="btn btn-outline" onClick={restoreCodex} disabled={!codexStatus?.has_backup || codexLoading}>恢复默认配置</button>
+          <button className="btn btn-outline" onClick={() => setShowRestoreConfirm(true)} disabled={!codexStatus?.has_backup || codexLoading}>恢复默认配置</button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>写入后 Codex 将使用本代理连接模型，恢复后还原原始配置</p>
       </div>
+
+      {/* Restore confirmation modal */}
+      {showRestoreConfirm && (
+        <div className="modal-overlay" onClick={() => setShowRestoreConfirm(false)}>
+          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()}>
+            <h3 className="card-title" style={{ color: 'var(--danger)' }}>确认恢复</h3>
+            <p style={{ marginBottom: 8 }}>确认恢复 Codex 到原始 OpenAI 配置？</p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>代理将停止工作，Codex 将使用默认 API。</p>
+            <div className="btn-group">
+              <button className="btn btn-danger" onClick={restoreCodex}>确认恢复</button>
+              <button className="btn btn-outline" onClick={() => setShowRestoreConfirm(false)}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3 className="card-title">服务端工具</h3>

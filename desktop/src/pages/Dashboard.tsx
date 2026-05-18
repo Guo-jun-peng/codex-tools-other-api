@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
+import type { ProxyStatus } from '../types'
 
-interface Props { status: any }
+interface Props { status: ProxyStatus | null }
 
 export default function Dashboard({ status }: Props) {
+  const navigate = useNavigate()
   const [models, setModels] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -47,7 +50,10 @@ export default function Dashboard({ status }: Props) {
             <button className="btn btn-outline btn-sm" onClick={loadModels}>重试</button>
           </div>
         ) : models.length === 0 ? (
-          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>暂无模型配置，请在"模型配置"页面添加</p>
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>暂无模型配置</p>
+            <button className="btn btn-primary btn-sm" onClick={() => navigate('/models')}>去配置模型</button>
+          </div>
         ) : (
           <div className="table-container">
             <table><thead><tr><th>别名</th><th>目标模型</th><th>提供商</th><th>状态</th></tr></thead>

@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
+import random
 from typing import AsyncIterator
 
 import httpx
 
 from .adapters.base import BaseAdapter
+
+logger = logging.getLogger("codex-adapter-bridge")
+
+RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
+MAX_RETRIES = 3
+BACKOFF_BASE = 1.0
+BACKOFF_MAX = 10.0
 
 
 class UpstreamClient:
@@ -46,6 +56,9 @@ class UpstreamClient:
             self._stream_client = None
 
     async def chat_completion(self, chat_req: dict) -> dict:
+        return await _with_retry(self._do_chat_completion, chat_req)
+
+    async def _do_chat_completion(self, chat_req: dict) -> dict:
         client = await self._get_client()
         url = self.adapter.build_chat_url()
         headers = self.adapter.get_headers(self.api_key)
@@ -66,7 +79,9 @@ class UpstreamClient:
         headers = self.adapter.get_headers(self.api_key)
         chat_req["stream"] = True
 
-        async with client.stream("POST", url, json=chat_req, headers=headers) as response:
+        response = await _with_retry_for_stream(client, url, chat_req, headers)
+
+        async with response:
             if response.status_code >= 400:
                 body = await response.aread()
                 raise httpx.HTTPStatusError(
@@ -84,3 +99,44 @@ class UpstreamClient:
                         yield chunk
                     except json.JSONDecodeError:
                         continue
+
+
+async def _with_retry(fn, *args, **kwargs):
+    last_exc = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return await fn(*args, **kwargs)
+        except httpx.HTTPStatusError as exc:
+            last_exc = exc
+            if exc.response.status_code not in RETRYABLE_STATUSES:
+                raise
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+            last_exc = exc
+        except Exception:
+            raise
+
+        if attempt < MAX_RETRIES:
+            delay = min(BACKOFF_BASE * (2 ** attempt) + random.uniform(0, 0.5), BACKOFF_MAX)
+            logger.warning("Retry %d/%d after %.1fs: %s", attempt + 1, MAX_RETRIES, delay, last_exc)
+            await asyncio.sleep(delay)
+    raise last_exc
+
+
+async def _with_retry_for_stream(client, url, chat_req, headers):
+    last_exc = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return await client.send(
+                client.build_request("POST", url, json=chat_req, headers=headers),
+                stream=True,
+            )
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as exc:
+            last_exc = exc
+        except Exception:
+            raise
+
+        if attempt < MAX_RETRIES:
+            delay = min(BACKOFF_BASE * (2 ** attempt) + random.uniform(0, 0.5), BACKOFF_MAX)
+            logger.warning("Stream retry %d/%d after %.1fs: %s", attempt + 1, MAX_RETRIES, delay, last_exc)
+            await asyncio.sleep(delay)
+    raise last_exc
