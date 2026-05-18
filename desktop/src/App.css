@@ -385,6 +385,19 @@ tr:hover td { background: var(--primary-light); }
   box-shadow: 0 20px 60px rgba(0,0,0,.15);
 }
 
+.modal-confirm {
+  min-width: 360px;
+  max-width: 420px;
+}
+
+/* Form hint */
+.form-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
 /* Skeleton loading */
 .skeleton { padding: 4px 0; }
 .skeleton-row {

@@ -19,6 +19,7 @@ export default function Models() {
   const [testResult, setTestResult] = useState<Record<string, any>>({})
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
   const loadModels = async () => {
     setLoadError(false)
@@ -51,13 +52,22 @@ export default function Models() {
   const resetForm = () => { setForm({ ...emptyForm }); setEditingAlias(null); setShowForm(false) }
 
   const editModel = (m: any) => {
-    setForm({ alias: m.alias, target_model: m.target_model, provider: m.provider, adapter: m.adapter, base_url: m.base_url, api_key: '', api_key_env: m.api_key_env, enabled: m.enabled })
-    setEditingAlias(m.alias); setShowForm(true)
+    setForm({
+      alias: m.alias,
+      target_model: m.target_model,
+      provider: m.provider,
+      adapter: m.adapter,
+      base_url: m.base_url,
+      api_key: m.api_key_hint || '',
+      api_key_env: m.api_key_env,
+      enabled: m.enabled,
+    })
+    setEditingAlias(m.alias)
+    setShowForm(true)
   }
 
   const handleAdapterChange = (adapterName: string) => {
     if (!adapterName) {
-      // "自动选择" — clear the fields
       setForm({ ...form, adapter: '', provider: '', base_url: '', api_key_env: '' })
       return
     }
@@ -73,6 +83,13 @@ export default function Models() {
     if (!form.alias || !form.target_model) { showToast('别名和目标模型为必填项', 'error'); return }
     setSaving(true)
     const data: any = { ...form }
+    // If editing and api_key is the masked hint (user didn't change it), keep existing key
+    if (editingAlias && data.api_key) {
+      const model = models.find(m => m.alias === editingAlias)
+      if (model && data.api_key === model.api_key_hint) {
+        delete data.api_key
+      }
+    }
     if (!data.api_key) delete data.api_key
     const r = editingAlias ? await api.updateModel(editingAlias, data) : await api.addModel(data)
     setSaving(false)
@@ -81,9 +98,10 @@ export default function Models() {
     resetForm(); loadModels()
   }
 
-  const deleteModel = async (alias: string) => {
-    if (!confirm(`确认删除模型 "${alias}"？`)) return
-    const r = await api.deleteModel(alias)
+  const confirmDelete = async () => {
+    if (!deleteTarget) return
+    const r = await api.deleteModel(deleteTarget)
+    setDeleteTarget(null)
     if (r._error) { showToast(r._error, 'error'); return }
     showToast('模型已删除', 'success')
     loadModels()
@@ -106,6 +124,8 @@ export default function Models() {
     setTestResult(prev => ({ ...prev, [alias]: r }))
   }
 
+  const isApiKeyMasked = (value: string) => /\*{3}/.test(value)
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
@@ -119,17 +139,32 @@ export default function Models() {
           <div className="modal">
             <h3 className="card-title">{editingAlias ? '编辑模型' : '添加模型'}</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
-              <div className="form-group"><label className="form-label">模型别名 (Codex 使用的名称)</label><input className="form-input" value={form.alias} placeholder="如: gpt-5-code" onChange={(e) => setForm({ ...form, alias: e.target.value })} disabled={!!editingAlias} /></div>
+              <div className="form-group"><label className="form-label">模型别名 (Codex 使用的名称)</label><input className="form-input" value={form.alias} placeholder="如: gpt-5-code" onChange={(e) => setForm({ ...form, alias: e.target.value })} /></div>
               <div className="form-group"><label className="form-label">目标模型</label><input className="form-input" value={form.target_model} placeholder="如: deepseek-ai/DeepSeek-V3.2" onChange={(e) => setForm({ ...form, target_model: e.target.value })} /></div>
               <div className="form-group"><label className="form-label">提供商名称</label><input className="form-input" value={form.provider} placeholder="如: siliconflow" onChange={(e) => setForm({ ...form, provider: e.target.value })} /></div>
               <div className="form-group"><label className="form-label">适配器</label><select className="form-select" value={form.adapter} onChange={(e) => handleAdapterChange(e.target.value)}><option value="">自动选择</option>{adapters.map((a) => <option key={a} value={a}>{a}</option>)}</select></div>
               <div className="form-group" style={{ gridColumn: '1 / -1' }}><label className="form-label">API 地址</label><input className="form-input" value={form.base_url} placeholder="如: https://api.siliconflow.cn/v1" onChange={(e) => setForm({ ...form, base_url: e.target.value })} /></div>
-              <div className="form-group"><label className="form-label">API Key</label><input className="form-input" type="password" value={form.api_key} placeholder={editingAlias ? '留空保持不变' : 'sk-...'} onChange={(e) => setForm({ ...form, api_key: e.target.value })} /></div>
+              <div className="form-group"><label className="form-label">API Key</label><input className="form-input" type="password" value={form.api_key} placeholder={editingAlias ? '留空保持不变' : 'sk-...'} onChange={(e) => setForm({ ...form, api_key: e.target.value })} /><span className="form-hint">{editingAlias && isApiKeyMasked(form.api_key) ? '已设置 — 修改此值将更新 Key' : editingAlias ? '留空则保留原 Key' : ''}</span></div>
               <div className="form-group"><label className="form-label">环境变量名</label><input className="form-input" value={form.api_key_env} placeholder="如: SILICONFLOW_API_KEY" onChange={(e) => setForm({ ...form, api_key_env: e.target.value })} /></div>
             </div>
             <div className="btn-group" style={{ marginTop: 16 }}>
               <button className="btn btn-primary" onClick={saveModel} disabled={saving}>{saving ? '保存中...' : '保存'}</button>
               <button className="btn btn-outline" onClick={resetForm}>取消</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setDeleteTarget(null) }}>
+          <div className="modal modal-confirm">
+            <h3 className="card-title" style={{ color: 'var(--danger)' }}>确认删除</h3>
+            <p style={{ marginBottom: 8 }}>确认删除模型 <strong>"{deleteTarget}"</strong>？</p>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>删除后不可恢复，已配置的 Codex 将无法使用该模型。</p>
+            <div className="btn-group">
+              <button className="btn btn-danger" onClick={confirmDelete}>确认删除</button>
+              <button className="btn btn-outline" onClick={() => setDeleteTarget(null)}>取消</button>
             </div>
           </div>
         </div>
@@ -161,7 +196,7 @@ export default function Models() {
                       <div className="btn-group">
                         <button className="btn btn-outline btn-sm" onClick={() => testModel(m.alias)} disabled={testing === m.alias}>{testing === m.alias ? '测试中...' : '测试'}</button>
                         <button className="btn btn-outline btn-sm" onClick={() => editModel(m)}>编辑</button>
-                        <button className="btn btn-danger btn-sm" onClick={() => deleteModel(m.alias)}>删除</button>
+                        <button className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(m.alias)}>删除</button>
                       </div>
                       {tr && <span className={`badge ${tr.status === 'ok' ? 'badge-success' : tr.status === 'testing' ? 'badge-warning' : 'badge-danger'}`} style={{ marginLeft: 8 }}>{tr.message?.slice(0, 30)}</span>}
                     </td>

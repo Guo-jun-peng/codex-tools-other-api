@@ -84,6 +84,7 @@ async def list_models():
             "base_url": provider.get("base_url", ""),
             "api_key_env": provider.get("api_key_env", ""),
             "api_key_set": bool(provider.get("api_key", "")),
+            "api_key_hint": _mask_key(provider.get("api_key", "")),
             "enabled": entry.get("enabled", True),
             "is_multimodal": entry.get("is_multimodal", False),
             "vision_alias": entry.get("vision_alias") or "",
@@ -496,6 +497,12 @@ async def shutdown():
 # ═══════════════════════════════════════════════════════════════════
 # 辅助
 # ═══════════════════════════════════════════════════════════════════
+
+def _mask_key(key: str) -> str:
+    if not key or len(key) <= 8:
+        return key
+    return key[:5] + "***" + key[-3:]
+
 
 def _find_provider_for_target(target: str, providers: dict) -> str | None:
     for pname, pinfo in providers.items():
