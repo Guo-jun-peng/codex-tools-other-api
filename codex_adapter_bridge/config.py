@@ -110,9 +110,9 @@ class Config:
             env_var = info.get("api_key_env", "")
             if env_var:
                 env_val = os.environ.get(env_var, "")
-                if env_val:
+                if env_val and not info.get("api_key", ""):
                     info["api_key"] = env_val
-                elif "api_key" not in info:
+                elif not env_val and "api_key" not in info:
                     info["api_key"] = ""
             elif "api_key" not in info:
                 info["api_key"] = ""

@@ -83,12 +83,9 @@ export default function Models() {
     if (!form.alias || !form.target_model) { showToast('别名和目标模型为必填项', 'error'); return }
     setSaving(true)
     const data: any = { ...form }
-    // If editing and api_key is the masked hint (user didn't change it), keep existing key
-    if (editingAlias && data.api_key) {
-      const model = models.find(m => m.alias === editingAlias)
-      if (model && data.api_key === model.api_key_hint) {
-        delete data.api_key
-      }
+    // If editing and api_key looks like a masked hint (contains ***), keep existing key
+    if (editingAlias && data.api_key && /\*{3}/.test(data.api_key)) {
+      delete data.api_key
     }
     if (!data.api_key) delete data.api_key
     const r = editingAlias ? await api.updateModel(editingAlias, data) : await api.addModel(data)
@@ -181,7 +178,7 @@ export default function Models() {
                     <td style={{ fontWeight: 500 }}>{m.alias}</td>
                     <td>{m.target_model}</td>
                     <td>{m.adapter || m.provider}</td>
-                    <td><span className={`badge ${m.api_key_set ? 'badge-success' : 'badge-danger'}`}>{m.api_key_set ? '已设置' : '未设置'}</span></td>
+                    <td><span className={`badge ${m.api_key_set ? 'badge-success' : 'badge-danger'}`}>{m.api_key_set ? (m.api_key_hint || '已设置') : '未设置'}</span></td>
                     <td>
                       <button
                         className={`toggle-switch ${m.enabled ? 'toggle-on' : 'toggle-off'}`}
