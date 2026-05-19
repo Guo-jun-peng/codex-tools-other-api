@@ -45,6 +45,7 @@ model_mapping:
 providers:
   deepseek:
     adapter: deepseek
+    api_key: ''
     api_key_env: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com/v1
     enabled: true
@@ -68,6 +69,7 @@ providers:
     enabled: true
   siliconflow:
     adapter: siliconflow
+    api_key: 
     api_key_env: SILICONFLOW_API_KEY
     base_url: https://api.siliconflow.cn/v1
     enabled: true
@@ -83,4 +85,4 @@ server:
   port: 8899
 tools:
   web_search:
-    enabled: true
+    enabled: false
