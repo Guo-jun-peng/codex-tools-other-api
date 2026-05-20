@@ -10,7 +10,7 @@ from typing import AsyncIterator
 
 import httpx
 
-from .adapters.base import BaseAdapter
+from .adapters.context import AdapterContext
 
 logger = logging.getLogger("codex-adapter-bridge")
 
@@ -23,9 +23,8 @@ BACKOFF_MAX = 10.0
 class UpstreamClient:
     """上游模型 API 异步客户端"""
 
-    def __init__(self, adapter: BaseAdapter, api_key: str, timeout: float = 120.0, stream_timeout: float = 600.0):
-        self.adapter = adapter
-        self.api_key = api_key
+    def __init__(self, context: AdapterContext, timeout: float = 120.0, stream_timeout: float = 600.0):
+        self.context = context
         self._client: httpx.AsyncClient | None = None
         self._stream_client: httpx.AsyncClient | None = None
         self._timeout = timeout
@@ -60,8 +59,8 @@ class UpstreamClient:
 
     async def _do_chat_completion(self, chat_req: dict) -> dict:
         client = await self._get_client()
-        url = self.adapter.build_chat_url()
-        headers = self.adapter.get_headers(self.api_key)
+        url = self.context.build_chat_url()
+        headers = self.context.get_headers()
 
         response = await client.post(url, json=chat_req, headers=headers)
         if response.status_code >= 400:
@@ -75,13 +74,13 @@ class UpstreamClient:
 
     async def chat_completion_stream(self, chat_req: dict) -> AsyncIterator[dict]:
         client = await self._get_stream_client()
-        url = self.adapter.build_chat_url()
-        headers = self.adapter.get_headers(self.api_key)
+        url = self.context.build_chat_url()
+        headers = self.context.get_headers()
         chat_req["stream"] = True
 
         response = await _with_retry_for_stream(client, url, chat_req, headers)
 
-        async with response:
+        try:
             if response.status_code >= 400:
                 body = await response.aread()
                 raise httpx.HTTPStatusError(
@@ -99,6 +98,8 @@ class UpstreamClient:
                         yield chunk
                     except json.JSONDecodeError:
                         continue
+        finally:
+            await response.aclose()
 
 
 async def _with_retry(fn, *args, **kwargs):

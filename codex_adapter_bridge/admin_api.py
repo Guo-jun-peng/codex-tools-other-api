@@ -13,6 +13,7 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 from .config import get_config
 from .adapters import get_registry
+from .adapters.context import AdapterContext
 from .stats import get_stats, RequestLog
 from .client import UpstreamClient
 from .codex_config import CodexConfigManager
@@ -107,38 +108,21 @@ async def add_model(data: dict):
         return {"error": "alias 和 target_model 为必填项"}, 400
 
     provider_name = data.get("provider", target)
-    providers = cfg._data.setdefault("providers", {})
-    if provider_name not in providers:
-        providers[provider_name] = {
-            "adapter": data.get("adapter", provider_name),
-            "base_url": data.get("base_url", ""),
-            "api_key_env": data.get("api_key_env", ""),
-            "enabled": data.get("enabled", True),
-        }
-    else:
-        p = providers[provider_name]
-        if "adapter" in data:
-            p["adapter"] = data["adapter"]
-        if "base_url" in data:
-            p["base_url"] = data["base_url"]
-        if "api_key_env" in data:
-            p["api_key_env"] = data["api_key_env"]
-
+    provider_info = {
+        "adapter": data.get("adapter", provider_name),
+        "base_url": data.get("base_url", ""),
+        "api_key_env": data.get("api_key_env", ""),
+        "enabled": data.get("enabled", True),
+    }
     if data.get("api_key"):
-        providers[provider_name]["api_key"] = data["api_key"]
-
-    if "enabled" in data:
-        providers[provider_name]["enabled"] = data["enabled"]
-
+        provider_info["api_key"] = data["api_key"]
     advanced = data.get("advanced", {})
     if advanced:
-        providers[provider_name].update({
-            "timeout": advanced.get("timeout", 120),
-            "max_retries": advanced.get("max_retries", 0),
-        })
+        provider_info["timeout"] = advanced.get("timeout", 120)
+        provider_info["max_retries"] = advanced.get("max_retries", 0)
+    cfg.add_or_update_provider(provider_name, provider_info)
 
-    mapping = cfg._data.setdefault("model_mapping", {})
-    mapping[alias] = {
+    entry = {
         "target": target,
         "provider": provider_name,
         "enabled": data.get("enabled", True),
@@ -149,93 +133,68 @@ async def add_model(data: dict):
         "is_video_gen": data.get("is_video_gen", False),
         "video_gen_alias": data.get("video_gen_alias") or None,
     }
-    cfg.save()
+    cfg.add_model(alias, entry)
     return {"status": "ok", "alias": alias}
 
 
 @router.put("/models/{alias}")
 async def update_model(alias: str, data: dict):
     cfg = get_config()
-    mapping = cfg._data.get("model_mapping", {})
+    mapping = cfg.model_mapping
 
     if alias not in mapping:
         return {"error": f"模型别名 '{alias}' 不存在"}, 404
 
     old_entry = mapping[alias]
-    old_target = old_entry.get("target", old_entry) if isinstance(old_entry, dict) else old_entry
+    model_fields = {}
+    for key in ("target_model", "provider", "enabled", "is_multimodal",
+                "vision_alias", "is_image_gen", "image_gen_alias",
+                "is_video_gen", "video_gen_alias"):
+        if key in data:
+            model_fields[key if key == "target_model" else key] = data[key]
+    if model_fields:
+        cfg.update_model(alias, model_fields)
 
-    target = data.get("target_model", old_target)
-    providers = cfg._data.setdefault("providers", {})
-    provider_name = data.get("provider", old_entry.get("provider", "") if isinstance(old_entry, dict) else "")
-
-    if not provider_name or provider_name not in providers:
-        found = _find_provider_for_target(old_target, providers)
-        if found:
-            provider_name = found
-
-    old_dict = old_entry if isinstance(old_entry, dict) else {}
-    mapping[alias] = {
-        "target": target,
-        "provider": provider_name,
-        "enabled": data.get("enabled", old_dict.get("enabled", True)),
-        "is_multimodal": data.get("is_multimodal", old_dict.get("is_multimodal", False)),
-        "vision_alias": data.get("vision_alias") if "vision_alias" in data else old_dict.get("vision_alias"),
-        "is_image_gen": data.get("is_image_gen", old_dict.get("is_image_gen", False)),
-        "image_gen_alias": data.get("image_gen_alias") if "image_gen_alias" in data else old_dict.get("image_gen_alias"),
-        "is_video_gen": data.get("is_video_gen", old_dict.get("is_video_gen", False)),
-        "video_gen_alias": data.get("video_gen_alias") if "video_gen_alias" in data else old_dict.get("video_gen_alias"),
-    }
-
-    if provider_name and provider_name in providers:
-        p = providers[provider_name]
+    provider_name = model_fields.get("provider", old_entry.get("provider", ""))
+    if provider_name:
+        provider_updates = {}
         if "base_url" in data:
-            p["base_url"] = data["base_url"]
+            provider_updates["base_url"] = data["base_url"]
         if "api_key" in data and data["api_key"]:
-            p["api_key"] = data["api_key"]
+            provider_updates["api_key"] = data["api_key"]
         if "api_key_env" in data:
-            p["api_key_env"] = data["api_key_env"]
+            provider_updates["api_key_env"] = data["api_key_env"]
         if "enabled" in data:
-            p["enabled"] = data["enabled"]
-
+            provider_updates["enabled"] = data["enabled"]
         advanced = data.get("advanced", {})
         if advanced:
-            p["timeout"] = advanced.get("timeout", p.get("timeout", 120))
-            p["max_retries"] = advanced.get("max_retries", p.get("max_retries", 0))
+            provider_updates["timeout"] = advanced.get("timeout", 120)
+            provider_updates["max_retries"] = advanced.get("max_retries", 0)
+        if provider_updates:
+            cfg.add_or_update_provider(provider_name, provider_updates)
 
-    cfg.save()
     return {"status": "ok", "alias": alias}
 
 
 @router.delete("/models/{alias}")
 async def delete_model(alias: str):
     cfg = get_config()
-    mapping = cfg._data.get("model_mapping", {})
-
-    if alias not in mapping:
+    if alias not in cfg.model_mapping:
         return {"error": f"模型别名 '{alias}' 不存在"}, 404
-
-    del cfg._data["model_mapping"][alias]
-    cfg.save()
+    cfg.delete_model(alias)
     return {"status": "ok"}
 
 
 @router.put("/models/{alias}/toggle")
 async def toggle_model(alias: str):
     cfg = get_config()
-    mapping = cfg._data.get("model_mapping", {})
-
-    if alias not in mapping:
+    if alias not in cfg.model_mapping:
         return {"error": f"模型别名 '{alias}' 不存在"}, 404
-
-    entry = mapping[alias]
-    if isinstance(entry, dict):
-        entry["enabled"] = not entry.get("enabled", True)
-        new_state = entry["enabled"]
-    else:
+    try:
+        new_state = cfg.toggle_model(alias)
+        return {"status": "ok", "alias": alias, "enabled": new_state}
+    except KeyError:
         return {"error": "旧格式模型不支持切换，请编辑模型"}, 400
-
-    cfg.save()
-    return {"status": "ok", "alias": alias, "enabled": new_state}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -246,7 +205,7 @@ async def toggle_model(alias: str):
 async def test_connection(alias: str, data: dict | None = None):
     cfg = get_config()
     reg = get_registry()
-    mapping = cfg._data.get("model_mapping", {})
+    mapping = cfg.model_mapping
 
     entry = mapping.get(alias, alias)
     if isinstance(entry, dict):
@@ -272,13 +231,16 @@ async def test_connection(alias: str, data: dict | None = None):
         return {"status": "error", "message": "API Key 未设置"}
 
     if data and data.get("base_url"):
-        adapter.base_url = data["base_url"]
+        base_url = data["base_url"]
     elif provider.get("base_url"):
-        adapter.base_url = provider["base_url"]
+        base_url = provider["base_url"]
+    else:
+        base_url = adapter.base_url
 
-    headers = adapter.get_headers(api_key)
-    chat_url = adapter.build_chat_url()
-    chat_body = adapter.preprocess_chat_request({
+    ctx = AdapterContext(adapter=adapter, base_url=base_url, api_key=api_key)
+    headers = ctx.get_headers()
+    chat_url = ctx.build_chat_url()
+    chat_body = ctx.preprocess_chat_request({
         "model": target,
         "messages": [{"role": "user", "content": "Hi"}],
         "max_tokens": 5,
@@ -316,13 +278,14 @@ async def test_connection(alias: str, data: dict | None = None):
 @router.get("/settings")
 async def get_settings():
     cfg = get_config()
+    sc = cfg.server_config
     return {
         "server": {
             "host": cfg.server_host,
             "port": cfg.server_port,
-            "log_level": cfg._data.get("server", {}).get("log_level", "info"),
-            "auto_start": cfg._data.get("server", {}).get("auto_start", False),
-            "close_to_tray": cfg._data.get("server", {}).get("close_to_tray", True),
+            "log_level": sc.get("log_level", "info"),
+            "auto_start": sc.get("auto_start", False),
+            "close_to_tray": sc.get("close_to_tray", True),
         },
         "config_path": str(cfg._config_path) if cfg._config_path else "",
     }
@@ -331,20 +294,10 @@ async def get_settings():
 @router.put("/settings")
 async def update_settings(data: dict):
     cfg = get_config()
-    server_cfg = cfg._data.setdefault("server", {})
-
-    if "host" in data:
-        server_cfg["host"] = data["host"]
-    if "port" in data:
-        server_cfg["port"] = int(data["port"])
-    if "log_level" in data:
-        server_cfg["log_level"] = data["log_level"]
-    if "auto_start" in data:
-        server_cfg["auto_start"] = data["auto_start"]
-    if "close_to_tray" in data:
-        server_cfg["close_to_tray"] = data["close_to_tray"]
-
-    cfg.save()
+    try:
+        cfg.update_server(data)
+    except ValueError as exc:
+        return {"error": str(exc)}, 400
     return {"status": "ok", "message": "设置已保存，部分设置需重启后生效"}
 
 
@@ -382,7 +335,7 @@ async def codex_restore():
 @router.get("/tools")
 async def get_tools():
     cfg = get_config()
-    tools_cfg = cfg._data.get("tools", {})
+    tools_cfg = cfg.tools
     from .tools import TOOL_EXECUTORS
     tools = {}
     for name in TOOL_EXECUTORS:
@@ -395,11 +348,7 @@ async def get_tools():
 @router.put("/tools")
 async def update_tools(data: dict):
     cfg = get_config()
-    tools_cfg = cfg._data.setdefault("tools", {})
-    for name, info in data.items():
-        if isinstance(info, dict):
-            tools_cfg[name] = info
-    cfg.save()
+    cfg.update_tools(data)
     return {"status": "ok"}
 
 
@@ -454,9 +403,7 @@ async def logs_stream(websocket: WebSocket):
 async def export_config():
     import yaml
     cfg = get_config()
-    data = json.loads(json.dumps(cfg._data))
-    for p in data.get("providers", {}).values():
-        p.pop("api_key", None)
+    data = cfg.export_config()
     return {
         "yaml": yaml.dump(data, allow_unicode=True, default_flow_style=False),
         "config_path": str(cfg._config_path) if cfg._config_path else "",
@@ -472,9 +419,7 @@ async def import_config(data: dict):
         return {"error": "缺少 yaml 字段"}, 400
     try:
         new_data = yaml.safe_load(yaml_str)
-        from .config import _deep_merge
-        cfg._data = _deep_merge(cfg._data, new_data)
-        cfg.save()
+        cfg.import_config(new_data)
         return {"status": "ok"}
     except Exception as exc:
         return {"error": str(exc)}, 400

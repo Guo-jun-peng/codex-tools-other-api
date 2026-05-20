@@ -1,90 +1,46 @@
-import { useEffect, useState } from 'react'
-import { api } from '../services/api'
+import { useSettings } from '../hooks/useSettings'
+import { useToast } from '../hooks/useToast'
+import Toast from '../components/Toast'
+import Modal from '../components/Modal'
 
 export default function Settings() {
-  const [settings, setSettings] = useState<any>(null)
-  const [codexStatus, setCodexStatus] = useState<any>(null)
-  const [toolsStatus, setToolsStatus] = useState<any>(null)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const s = useSettings()
+  const { toast, showToast, dismissToast } = useToast()
 
-  const [host, setHost] = useState('127.0.0.1')
-  const [port, setPort] = useState(8899)
-  const [logLevel, setLogLevel] = useState('info')
-  const [loading, setLoading] = useState(false)
-  const [codexLoading, setCodexLoading] = useState(false)
-  const [showRestoreConfirm, setShowRestoreConfirm] = useState(false)
-
-  useEffect(() => {
-    api.getSettings().then((r) => {
-      if (r?.server && !r._error) {
-        setSettings(r); setHost(r.server.host); setPort(r.server.port); setLogLevel(r.server.log_level)
-      }
-    })
-    api.getCodexStatus().then((r) => { if (!r._error) setCodexStatus(r) })
-    api.getTools().then((r) => { if (!r._error) setToolsStatus(r) })
-  }, [])
-
-  const showToast = (msg: string, type: 'success' | 'error') => {
-    setToast({ msg, type }); setTimeout(() => setToast(null), 2500)
-  }
-
-  const portError = (port < 1024 || port > 65535) ? '端口范围: 1024-65535' : ''
-
-  const saveSettings = async () => {
-    if (portError) { showToast(portError, 'error'); return }
-    setLoading(true)
-    const r = await api.updateSettings({ host, port, log_level: logLevel })
-    setLoading(false)
-    if (r._error) { showToast(r._error, 'error'); return }
+  const handleSave = async () => {
+    const err = await s.saveSettings()
+    if (err) { showToast(err, 'error'); return }
     showToast('设置已保存', 'success')
   }
 
-  const refreshCodex = async () => {
-    const r = await api.getCodexStatus()
-    if (!r._error) setCodexStatus(r)
+  const handleApplyCodex = async () => {
+    const err = await s.applyCodex()
+    showToast(err ? err : 'Codex 配置已写入', err ? 'error' : 'success')
   }
 
-  const applyCodex = async () => {
-    setCodexLoading(true)
-    const model = codexStatus?.current_model || 'deepseek-ai/DeepSeek-V3.2'
-    const r = await api.applyCodexConfig(model, port)
-    setCodexLoading(false)
-    showToast(r._error ? r._error : 'Codex 配置已写入', r._error ? 'error' : 'success')
-    refreshCodex()
-  }
-
-  const restoreCodex = async () => {
-    setShowRestoreConfirm(false)
-    setCodexLoading(true)
-    const r = await api.restoreCodexConfig()
-    setCodexLoading(false)
-    showToast(r._error ? r._error : 'Codex 配置已恢复', r._error ? 'error' : 'success')
-    refreshCodex()
-  }
-
-  const toggleTool = async (name: string, enabled: boolean) => {
-    await api.updateTools({ [name]: { enabled } })
-    api.getTools().then((r) => { if (!r._error) setToolsStatus(r) })
+  const handleRestoreCodex = async () => {
+    const err = await s.restoreCodex()
+    showToast(err ? err : 'Codex 配置已恢复', err ? 'error' : 'success')
   }
 
   return (
     <div>
       <h2 className="card-title" style={{ fontSize: 16, marginBottom: 20 }}>全局设置</h2>
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
 
       <div className="card">
         <h3 className="card-title">服务器配置</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 24px', maxWidth: 500 }}>
-          <div className="form-group"><label className="form-label">监听地址</label><input className="form-input" value={host} onChange={(e) => setHost(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">监听地址</label><input className="form-input" value={s.host} onChange={(e) => s.setHost(e.target.value)} /></div>
           <div className="form-group">
             <label className="form-label">端口 (1024-65535)</label>
-            <input className="form-input" type="number" min={1024} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value))} style={portError ? { borderColor: 'var(--danger)', boxShadow: '0 0 0 3px #fee2e2' } : {}} />
-            {portError && <span className="form-hint" style={{ color: 'var(--danger)' }}>{portError}</span>}
+            <input className="form-input" type="number" min={1024} max={65535} value={s.port} onChange={(e) => s.setPort(Number(e.target.value))} style={s.portError ? { borderColor: 'var(--danger)', boxShadow: '0 0 0 3px #fee2e2' } : {}} />
+            {s.portError && <span className="form-hint" style={{ color: 'var(--danger)' }}>{s.portError}</span>}
           </div>
-          <div className="form-group"><label className="form-label">日志级别</label><select className="form-select" value={logLevel} onChange={(e) => setLogLevel(e.target.value)}><option value="debug">Debug</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select></div>
+          <div className="form-group"><label className="form-label">日志级别</label><select className="form-select" value={s.logLevel} onChange={(e) => s.setLogLevel(e.target.value)}><option value="debug">Debug</option><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error</option></select></div>
         </div>
         <div className="btn-group" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary" onClick={saveSettings} disabled={loading}>{loading ? '保存中...' : '保存设置'}</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={s.loading}>{s.loading ? '保存中...' : '保存设置'}</button>
         </div>
       </div>
 
@@ -93,42 +49,39 @@ export default function Settings() {
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontWeight: 500, fontSize: 13 }}>配置目录:</span>
-            <span style={{ fontSize: 13, color: codexStatus?.found ? 'var(--success)' : 'var(--danger)' }}>
-              {codexStatus?.found ? codexStatus.dir : '未找到 .codex 目录'}
+            <span style={{ fontSize: 13, color: s.codexStatus?.found ? 'var(--success)' : 'var(--danger)' }}>
+              {s.codexStatus?.found ? s.codexStatus.dir : '未找到 .codex 目录'}
             </span>
-            <button className="btn btn-outline btn-sm" onClick={refreshCodex}>刷新</button>
+            <button className="btn btn-outline btn-sm" onClick={s.refreshCodex}>刷新</button>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>备份状态: {codexStatus?.has_backup ? '已备份' : '无备份'}</div>
-          {codexStatus?.current_model && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>当前模型: {codexStatus.current_model} | 端口: {codexStatus.current_port}</div>}
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>备份状态: {s.codexStatus?.has_backup ? '已备份' : '无备份'}</div>
+          {s.codexStatus?.current_model && <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>当前模型: {s.codexStatus.current_model} | 端口: {s.codexStatus.current_port}</div>}
         </div>
         <div className="btn-group">
-          <button className="btn btn-primary" onClick={applyCodex} disabled={codexLoading}>{codexLoading ? '处理中...' : '写入配置 (使用代理)'}</button>
-          <button className="btn btn-outline" onClick={() => setShowRestoreConfirm(true)} disabled={!codexStatus?.has_backup || codexLoading}>恢复默认配置</button>
+          <button className="btn btn-primary" onClick={handleApplyCodex} disabled={s.codexLoading}>{s.codexLoading ? '处理中...' : '写入配置 (使用代理)'}</button>
+          <button className="btn btn-outline" onClick={() => s.setShowRestoreConfirm(true)} disabled={!s.codexStatus?.has_backup || s.codexLoading}>恢复默认配置</button>
         </div>
         <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>写入后 Codex 将使用本代理连接模型，恢复后还原原始配置</p>
       </div>
 
-      {/* Restore confirmation modal */}
-      {showRestoreConfirm && (
-        <div className="modal-overlay" onClick={() => setShowRestoreConfirm(false)}>
-          <div className="modal modal-confirm" onClick={(e) => e.stopPropagation()}>
-            <h3 className="card-title" style={{ color: 'var(--danger)' }}>确认恢复</h3>
-            <p style={{ marginBottom: 8 }}>确认恢复 Codex 到原始 OpenAI 配置？</p>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>代理将停止工作，Codex 将使用默认 API。</p>
-            <div className="btn-group">
-              <button className="btn btn-danger" onClick={restoreCodex}>确认恢复</button>
-              <button className="btn btn-outline" onClick={() => setShowRestoreConfirm(false)}>取消</button>
-            </div>
-          </div>
-        </div>
+      {s.showRestoreConfirm && (
+        <Modal title="确认恢复" variant="danger" onClose={() => s.setShowRestoreConfirm(false)}
+          footer={<>
+            <button className="btn btn-danger" onClick={handleRestoreCodex}>确认恢复</button>
+            <button className="btn btn-outline" onClick={() => s.setShowRestoreConfirm(false)}>取消</button>
+          </>}
+        >
+          <p style={{ marginBottom: 8 }}>确认恢复 Codex 到原始 OpenAI 配置？</p>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 20 }}>代理将停止工作，Codex 将使用默认 API。</p>
+        </Modal>
       )}
 
       <div className="card">
         <h3 className="card-title">服务端工具</h3>
-        {toolsStatus?.tools && Object.entries(toolsStatus.tools).map(([name, info]: [string, any]) => (
+        {s.toolsStatus && Object.entries(s.toolsStatus).map(([name, info]) => (
           <div key={name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
             <div><div style={{ fontWeight: 500, fontSize: 13 }}>{name}</div><div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{name === 'web_search' ? '自动执行 DuckDuckGo 搜索' : ''}</div></div>
-            <div className="toggle" onClick={() => toggleTool(name, !info.enabled)}><div className={`toggle-switch ${info.enabled ? 'active' : ''}`} /><span style={{ fontSize: 12 }}>{info.enabled ? '启用' : '禁用'}</span></div>
+            <div className="toggle" onClick={() => s.toggleTool(name, !info.enabled)}><div className={`toggle-switch ${info.enabled ? 'active' : ''}`} /><span style={{ fontSize: 12 }}>{info.enabled ? '启用' : '禁用'}</span></div>
           </div>
         ))}
       </div>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .base import BaseAdapter
+from .context import AdapterContext
 
 
 class AdapterRegistry:

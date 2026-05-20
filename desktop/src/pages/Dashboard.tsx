@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../services/api'
-import type { ProxyStatus } from '../types'
+import { modelsApi } from '../api/models'
+import type { ProxyStatus } from '../types/status'
+import type { ModelEntry } from '../types/model'
+import Badge from '../components/Badge'
 
 interface Props { status: ProxyStatus | null }
 
 export default function Dashboard({ status }: Props) {
   const navigate = useNavigate()
-  const [models, setModels] = useState<any[]>([])
+  const [models, setModels] = useState<ModelEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const loadModels = async () => {
     setLoading(true)
     setError('')
-    const r = await api.getModels()
+    const r = await modelsApi.getModels()
     if (r._error) { setError(r._error); setModels([]) }
     else { setModels(r?.models || []) }
     setLoading(false)
@@ -23,7 +25,7 @@ export default function Dashboard({ status }: Props) {
   useEffect(() => { loadModels() }, [])
 
   const stats = status?.stats
-  const enabledModels = models.filter((m: any) => m.enabled)
+  const enabledModels = models.filter(m => m.enabled)
 
   return (
     <div>
@@ -57,12 +59,12 @@ export default function Dashboard({ status }: Props) {
         ) : (
           <div className="table-container">
             <table><thead><tr><th>别名</th><th>目标模型</th><th>提供商</th><th>状态</th></tr></thead>
-              <tbody>{models.map((m: any) => (
+              <tbody>{models.map((m) => (
                 <tr key={m.alias}>
                   <td style={{ fontWeight: 500 }}>{m.alias}</td>
                   <td>{m.target_model}</td>
                   <td>{m.provider || m.adapter}</td>
-                  <td><span className={`badge ${m.enabled ? 'badge-success' : 'badge-warning'}`}>{m.enabled ? '启用' : '禁用'}</span></td>
+                  <td><Badge variant={m.enabled ? 'success' : 'warning'}>{m.enabled ? '启用' : '禁用'}</Badge></td>
                 </tr>
               ))}</tbody>
             </table>
